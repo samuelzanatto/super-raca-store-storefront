@@ -6,13 +6,13 @@ import { initiatePaymentSession } from "@lib/data/cart"
 import { CheckCircleSolid, CreditCard } from "@medusajs/icons"
 import { Button, Container, Heading, Text, clx } from "@medusajs/ui"
 import ErrorMessage from "@modules/checkout/components/error-message"
-import PaymentContainer, {
-  StripeCardContainer,
-} from "@modules/checkout/components/payment-container"
+import PaymentContainer from "@modules/checkout/components/payment-container"
+import { StripeContext } from "@modules/checkout/components/payment-wrapper/stripe-wrapper"
 import Divider from "@modules/common/components/divider"
 import { useDictionary } from "@lib/i18n/use-dictionary"
+import { PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useContext, useEffect, useState } from "react"
 
 const Payment = ({
   cart,
@@ -28,11 +28,10 @@ const Payment = ({
 
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [cardBrand, setCardBrand] = useState<string | null>(null)
-  const [cardComplete, setCardComplete] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(
     activeSession?.provider_id ?? ""
   )
+  const stripeReady = useContext(StripeContext)
 
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -44,9 +43,17 @@ const Payment = ({
     setError(null)
     setSelectedPaymentMethod(method)
     if (isStripeLike(method)) {
-      await initiatePaymentSession(cart, {
-        provider_id: method,
-      })
+      setIsLoading(true)
+      try {
+        await initiatePaymentSession(cart, {
+          provider_id: method,
+        })
+        router.refresh()
+      } catch (err: any) {
+        setError(err.message)
+      } finally {
+        setIsLoading(false)
+      }
     }
   }
 
@@ -75,9 +82,6 @@ const Payment = ({
   const handleSubmit = async () => {
     setIsLoading(true)
     try {
-      const shouldInputCard =
-        isStripeLike(selectedPaymentMethod) && !activeSession
-
       const checkActiveSession =
         activeSession?.provider_id === selectedPaymentMethod
 
@@ -87,14 +91,9 @@ const Payment = ({
         })
       }
 
-      if (!shouldInputCard) {
-        return router.push(
-          pathname + "?" + createQueryString("step", "review"),
-          {
-            scroll: false,
-          }
-        )
-      }
+      return router.push(pathname + "?" + createQueryString("step", "review"), {
+        scroll: false,
+      })
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -158,26 +157,33 @@ const Payment = ({
               >
                 {availablePaymentMethods.map((paymentMethod) => (
                   <div key={paymentMethod.id}>
-                    {isStripeLike(paymentMethod.id) ? (
-                      <StripeCardContainer
-                        paymentProviderId={paymentMethod.id}
-                        selectedPaymentOptionId={selectedPaymentMethod}
-                        paymentInfoMap={paymentInfoMap}
-                        setCardBrand={setCardBrand}
-                        setError={setError}
-                        setCardComplete={setCardComplete}
-                      />
-                    ) : (
-                      <PaymentContainer
-                        paymentInfoMap={paymentInfoMap}
-                        paymentProviderId={paymentMethod.id}
-                        selectedPaymentOptionId={selectedPaymentMethod}
-                      />
-                    )}
+                    <PaymentContainer
+                      paymentInfoMap={paymentInfoMap}
+                      paymentProviderId={paymentMethod.id}
+                      selectedPaymentOptionId={selectedPaymentMethod}
+                      disabled={isLoading}
+                    />
                   </div>
                 ))}
               </RadioGroup>
             </>
+          )}
+
+          {isStripeLike(selectedPaymentMethod) &&
+            activeSession?.provider_id === selectedPaymentMethod &&
+            stripeReady && (
+              <StripePaymentElement
+                isLoading={isLoading}
+                setError={setError}
+                onComplete={() =>
+                  router.push(
+                    pathname + "?" + createQueryString("step", "review"),
+                    {
+                      scroll: false,
+                    }
+                  )
+                }
+              />
           )}
 
           {paidByGiftcard && (
@@ -199,21 +205,18 @@ const Payment = ({
             data-testid="payment-method-error-message"
           />
 
-          <Button
-            size="large"
-            className="mt-6"
-            onClick={handleSubmit}
-            isLoading={isLoading}
-            disabled={
-              (isStripeLike(selectedPaymentMethod) && !cardComplete) ||
-              (!selectedPaymentMethod && !paidByGiftcard)
-            }
-            data-testid="submit-payment-button"
-          >
-            {!activeSession && isStripeLike(selectedPaymentMethod)
-              ? dictionary.checkout.enterCardDetails
-              : dictionary.checkout.continueToReview}
-          </Button>
+          {!isStripeLike(selectedPaymentMethod) && (
+            <Button
+              size="large"
+              className="mt-6"
+              onClick={handleSubmit}
+              isLoading={isLoading}
+              disabled={!selectedPaymentMethod && !paidByGiftcard}
+              data-testid="submit-payment-button"
+            >
+              {dictionary.checkout.continueToReview}
+            </Button>
+          )}
         </div>
 
         <div className={isOpen ? "hidden" : "block"}>
@@ -244,9 +247,7 @@ const Payment = ({
                     )}
                   </Container>
                   <Text>
-                    {isStripeLike(selectedPaymentMethod) && cardBrand
-                      ? cardBrand
-                      : dictionary.checkout.anotherStepWillAppear}
+                    {dictionary.checkout.anotherStepWillAppear}
                   </Text>
                 </div>
               </div>
@@ -267,6 +268,68 @@ const Payment = ({
         </div>
       </div>
       <Divider className="mt-8" />
+    </div>
+  )
+}
+
+const StripePaymentElement = ({
+  isLoading,
+  setError,
+  onComplete,
+}: {
+  isLoading: boolean
+  setError: (message: string | null) => void
+  onComplete: () => void
+}) => {
+  const dictionary = useDictionary()
+  const stripe = useStripe()
+  const elements = useElements()
+  const [submitting, setSubmitting] = useState(false)
+  const [complete, setComplete] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!stripe || !elements) {
+      return
+    }
+
+    setSubmitting(true)
+    setError(null)
+
+    const { error } = await elements.submit()
+
+    if (error) {
+      setError(error.message || "Payment details are incomplete.")
+      setSubmitting(false)
+      return
+    }
+
+    setSubmitting(false)
+    onComplete()
+  }
+
+  return (
+    <div className="mt-5 transition-all duration-150 ease-in-out">
+      <PaymentElement
+        onChange={(event) => {
+          setComplete(event.complete)
+          if (event.complete) {
+            setError(null)
+          }
+        }}
+        options={{
+          layout: "accordion",
+        }}
+      />
+      <Button
+        size="large"
+        className="mt-6"
+        onClick={handleSubmit}
+        isLoading={submitting || isLoading}
+        disabled={!complete || !stripe || !elements || submitting || isLoading}
+        data-testid="submit-payment-button"
+      >
+        {dictionary.checkout.continueToReview}
+      </Button>
     </div>
   )
 }
