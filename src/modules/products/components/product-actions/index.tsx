@@ -40,6 +40,7 @@ export default function ProductActions({
 
   const [options, setOptions] = useState<Record<string, string | undefined>>({})
   const [isAdding, setIsAdding] = useState(false)
+  const [addedToCart, setAddedToCart] = useState(false)
   const initializedProductId = useRef<string | null>(null)
   const countryCode = useParams().countryCode as string
 
@@ -143,13 +144,17 @@ export default function ProductActions({
 
     setIsAdding(true)
 
-    await addToCart({
-      variantId: selectedVariant.id,
-      quantity: 1,
-      countryCode,
-    })
-
-    setIsAdding(false)
+    try {
+      await addToCart({
+        variantId: selectedVariant.id,
+        quantity: 1,
+        countryCode,
+      })
+      setAddedToCart(true)
+      setTimeout(() => setAddedToCart(false), 2000)
+    } finally {
+      setIsAdding(false)
+    }
   }
 
   return (
@@ -193,7 +198,11 @@ export default function ProductActions({
           isLoading={isAdding}
           data-testid="add-product-button"
         >
-          {!selectedVariant && !options
+          {isAdding
+            ? dict.product.adding
+            : addedToCart
+            ? dict.product.added
+            : !selectedVariant && !options
             ? dict.product.selectVariant
             : !inStock || !isValidVariant
             ? dict.product.outOfStock
@@ -207,6 +216,7 @@ export default function ProductActions({
           inStock={inStock}
           handleAddToCart={handleAddToCart}
           isAdding={isAdding}
+          addedToCart={addedToCart}
           show={!inView}
           optionsDisabled={!!disabled || isAdding}
         />

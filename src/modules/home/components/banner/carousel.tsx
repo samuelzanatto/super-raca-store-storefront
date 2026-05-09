@@ -10,7 +10,6 @@ interface BannerCarouselProps {
     title: string
     description?: string
     image_url?: string
-    image_data?: string
     link: string
     link_text?: string
   }>
@@ -58,25 +57,16 @@ export default function BannerCarousel({ banners }: BannerCarouselProps) {
                 className="min-w-full h-full flex-shrink-0 relative"
               >
                 {/* Image */}
-                {banner.image_url || banner.image_data ? (
-                  <>
-                    {!banner.image_url && (banner.image_data ?? "").startsWith("data:") ? (
-                      <img
-                        src={banner.image_data}
-                        alt={banner.title}
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
-                    ) : (
-                      <Image
-                        src={banner.image_url || ""}
-                        alt={banner.title}
-                        fill
-                        className="object-cover"
-                        priority={banners[0]?.id === banner.id}
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 100vw"
-                      />
-                    )}
-                  </>
+                {banner.image_url ? (
+                  <Image
+                    src={banner.image_url}
+                    alt={banner.title}
+                    fill
+                    className="object-cover"
+                    priority={banners[0]?.id === banner.id}
+                    quality={95}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 100vw"
+                  />
                 ) : null}
 
                 {/* Link wrapping the entire banner if a link exists */}

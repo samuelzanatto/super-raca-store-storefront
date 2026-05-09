@@ -1,12 +1,12 @@
 import { sdk } from "@lib/config"
 import { cache } from "react"
+import { getCacheOptions } from "./cookies"
 
 export type Banner = {
   id: string
   title: string
   description?: string
   image_url?: string
-  image_data?: string
   link: string
   link_text?: string
   is_active: boolean
@@ -19,11 +19,17 @@ export type Banner = {
  */
 export const listBanners = cache(async (): Promise<Banner[]> => {
   try {
+    const next = {
+      ...(await getCacheOptions("banners")),
+      revalidate: 60,
+    }
+
     const response = await sdk.client.fetch<{
       banners: Banner[]
     }>(`/store/banners`, {
       method: "GET",
-      cache: "no-store",
+      next,
+      cache: "force-cache",
     })
 
     return response.banners || []
@@ -39,11 +45,17 @@ export const listBanners = cache(async (): Promise<Banner[]> => {
 export const retrieveBanner = cache(
   async (id: string): Promise<Banner | null> => {
     try {
+      const next = {
+        ...(await getCacheOptions("banners")),
+        revalidate: 60,
+      }
+
       const response = await sdk.client.fetch<{
         banner: Banner
       }>(`/store/banners/${id}`, {
         method: "GET",
-        cache: "no-store",
+        next,
+        cache: "force-cache",
       })
 
       return response.banner || null
