@@ -7,6 +7,10 @@ checkEnvVariables()
  */
 const S3_HOSTNAME = process.env.MEDUSA_CLOUD_S3_HOSTNAME
 const S3_PATHNAME = process.env.MEDUSA_CLOUD_S3_PATHNAME
+const SUPABASE_PROJECT_REF =
+  process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF ||
+  process.env.SUPABASE_PROJECT_REF ||
+  "ddbuptidjujztkfcsvqz"
 
 /**
  * @type {import('next').NextConfig}
@@ -42,6 +46,20 @@ const nextConfig = {
         protocol: "https",
         hostname: "medusa-server-testing.s3.us-east-1.amazonaws.com",
       },
+      ...(SUPABASE_PROJECT_REF
+        ? [
+            {
+              protocol: "https",
+              hostname: `${SUPABASE_PROJECT_REF}.supabase.co`,
+              pathname: "/storage/v1/object/public/**",
+            },
+            {
+              protocol: "https",
+              hostname: `${SUPABASE_PROJECT_REF}.storage.supabase.co`,
+              pathname: "/storage/v1/object/public/**",
+            },
+          ]
+        : []),
       ...(S3_HOSTNAME && S3_PATHNAME
         ? [
             {

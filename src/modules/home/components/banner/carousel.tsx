@@ -58,9 +58,9 @@ export default function BannerCarousel({ banners }: BannerCarouselProps) {
                 className="min-w-full h-full flex-shrink-0 relative"
               >
                 {/* Image */}
-                {banner.image_data || banner.image_url ? (
+                {banner.image_url || banner.image_data ? (
                   <>
-                    {(banner.image_data ?? "").startsWith("data:") ? (
+                    {!banner.image_url && (banner.image_data ?? "").startsWith("data:") ? (
                       <img
                         src={banner.image_data}
                         alt={banner.title}

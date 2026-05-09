@@ -23,6 +23,7 @@ export const listBanners = cache(async (): Promise<Banner[]> => {
       banners: Banner[]
     }>(`/store/banners`, {
       method: "GET",
+      cache: "no-store",
     })
 
     return response.banners || []
@@ -42,6 +43,7 @@ export const retrieveBanner = cache(
         banner: Banner
       }>(`/store/banners/${id}`, {
         method: "GET",
+        cache: "no-store",
       })
 
       return response.banner || null

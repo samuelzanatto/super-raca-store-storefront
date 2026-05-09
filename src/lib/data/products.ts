@@ -49,6 +49,10 @@ export const listProducts = async ({
     ...(await getAuthHeaders()),
   }
 
+  const { fields, ...restQueryParams } = queryParams || {}
+  const defaultFields =
+    "*images,*variants.calculated_price,+variants.inventory_quantity,*variants.images,+metadata,+tags,"
+
   return sdk.client
     .fetch<{ products: HttpTypes.StoreProduct[]; count: number }>(
       `/store/products`,
@@ -58,9 +62,8 @@ export const listProducts = async ({
           limit,
           offset,
           region_id: region?.id,
-          fields:
-            "*variants.calculated_price,+variants.inventory_quantity,*variants.images,+metadata,+tags,",
-          ...queryParams,
+          fields: fields || defaultFields,
+          ...restQueryParams,
         },
         headers,
         cache: "no-store",
